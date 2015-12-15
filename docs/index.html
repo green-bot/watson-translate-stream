@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+  <title>index.coffee</title>
+  <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+  <meta name="viewport" content="width=device-width, target-densitydpi=160dpi, initial-scale=1.0; maximum-scale=1.0; user-scalable=0;">
+  <link rel="stylesheet" media="all" href="docco.css" />
+</head>
+<body>
+  <div id="container">
+    <div id="background"></div>
+    
+    <ul class="sections">
+        
+          <li id="title">
+              <div class="annotation">
+                  <h1>index.coffee</h1>
+              </div>
+          </li>
+        
+        
+        
+        <li id="section-1">
+            <div class="annotation">
+              
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-1">&#182;</a>
+              </div>
+              <p>Description</p>
+<p>Session connects users with shell scripts.
+Author: howethomas, ctbailey</p>
+
+            </div>
+            
+            <div class="content"><div class='highlight'><pre>Stream = <span class="hljs-built_in">require</span>(<span class="hljs-string">'stream'</span>)
+Pipe = <span class="hljs-built_in">require</span>(<span class="hljs-string">'multipipe'</span>)
+Util = <span class="hljs-built_in">require</span>(<span class="hljs-string">'util'</span>)
+
+DEBUG = <span class="hljs-literal">true</span>
+<span class="hljs-function"><span class="hljs-title">debug</span> = <span class="hljs-params">(text)</span> -&gt;</span>
+  <span class="hljs-built_in">console</span>.log text <span class="hljs-keyword">if</span> DEBUG
+
+Watson = <span class="hljs-built_in">require</span>(<span class="hljs-string">'watson-developer-cloud'</span>)
+<span class="hljs-keyword">if</span> process.env.WATSON_USERNAME? <span class="hljs-keyword">and</span> process.env.WATSON_PASSWORD?
+  LanguageTranslation = Watson.language_translation(
+    username: process.env.WATSON_USERNAME
+    password: process.env.WATSON_PASSWORD
+    version: <span class="hljs-string">'v2'</span>
+    )
+
+<span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">LanguageDetector</span> <span class="hljs-keyword">extends</span> <span class="hljs-title">Stream</span>.<span class="hljs-title">Transform</span></span>
+  constructor: <span class="hljs-function"><span class="hljs-params">(@lang, @detectorId)</span> -&gt;</span>
+    @detectorId ?= <span class="hljs-string">'Language Detector'</span>
+    @debug = <span class="hljs-function"><span class="hljs-params">(text)</span> -&gt;</span> debug <span class="hljs-string">"[<span class="hljs-subst">#{@detectorId}</span>] "</span> + text
+    @adaptive = !@lang
+    @words = <span class="hljs-string">''</span>
+    <span class="hljs-keyword">super</span>
+    @debug <span class="hljs-string">"Adaptive value in constructor: <span class="hljs-subst">#{@adaptive}</span>"</span>
+    <span class="hljs-keyword">if</span> @lang
+      @debug <span class="hljs-string">"Detector contstructed with <span class="hljs-subst">#{@lang}</span>"</span>
+    <span class="hljs-keyword">else</span>
+      @debug <span class="hljs-string">"Detector constructed in adaptive mode"</span>
+
+  analyze: <span class="hljs-function"><span class="hljs-params">(words, cb)</span> =&gt;</span>
+    @debug <span class="hljs-string">"Adaptive value in analyze: <span class="hljs-subst">#{@adaptive}</span>"</span>
+    @debug <span class="hljs-string">"Running in adaptive mode "</span> <span class="hljs-keyword">if</span> @adaptive
+    <span class="hljs-keyword">if</span> @adaptive
+      @words += words
+      @debug <span class="hljs-string">"Analyzing "</span> + Util.inspect @words
+      LanguageTranslation.identify text: @words, <span class="hljs-function"><span class="hljs-params">(err, result)</span> =&gt;</span>
+        <span class="hljs-keyword">if</span> (err)
+          @debug <span class="hljs-string">"Language detection error : "</span> + err
+        <span class="hljs-keyword">else</span>
+          @lang = result.languages[<span class="hljs-number">0</span>].language</pre></div></div>
+            
+        </li>
+        
+        
+        <li id="section-2">
+            <div class="annotation">
+              
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-2">&#182;</a>
+              </div>
+              <p>TODO: Check to see if @lang a supported translation.</p>
+
+            </div>
+            
+            <div class="content"><div class='highlight'><pre>          @debug <span class="hljs-string">"Language detected as "</span> + @lang
+        cb()
+    <span class="hljs-keyword">else</span>
+      cb()
+
+  getLang: <span class="hljs-function"><span class="hljs-params">()</span> =&gt;</span>
+    @debug <span class="hljs-string">"Language detector thinks language is <span class="hljs-subst">#{@lang}</span>"</span>
+    @lang
+
+  _transform: <span class="hljs-function"><span class="hljs-params">(chunk, enc, cb)</span> =&gt;</span>
+    @debug <span class="hljs-string">"About to analyze"</span>
+    @analyze chunk.toString(), <span class="hljs-function"><span class="hljs-params">()</span> =&gt;</span>
+      @debug <span class="hljs-string">"Done analyzing"</span>
+      @push chunk
+      cb()
+
+<span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">LanguageStream</span> <span class="hljs-keyword">extends</span> <span class="hljs-title">Stream</span>.<span class="hljs-title">Transform</span></span>
+  constructor: <span class="hljs-function"><span class="hljs-params">(@fromLanguage, @toLanguage)</span> -&gt;</span>
+    <span class="hljs-keyword">super</span>
+
+  _transform: <span class="hljs-function"><span class="hljs-params">(chunk, enc, cb)</span> =&gt;</span>
+    words = chunk.toString()
+    debug <span class="hljs-string">"Translating <span class="hljs-subst">#{words.trim()}</span>"</span>
+    from = @fromLanguage()
+    to = @toLanguage()
+
+    unknownLanguage = <span class="hljs-keyword">not</span> from <span class="hljs-keyword">or</span> <span class="hljs-keyword">not</span> to
+    sameLanguage = from <span class="hljs-keyword">is</span> to</pre></div></div>
+            
+        </li>
+        
+        
+        <li id="section-3">
+            <div class="annotation">
+              
+              <div class="pilwrap ">
+                <a class="pilcrow" href="#section-3">&#182;</a>
+              </div>
+              <p>if we don’t know the source or target languages
+don’t translate anythhing. This is the case
+if we’re in adaptive language detection mode
+and the user hasn’t said anything yet.</p>
+
+            </div>
+            
+            <div class="content"><div class='highlight'><pre>    <span class="hljs-keyword">if</span> unknownLanguage <span class="hljs-keyword">or</span> sameLanguage
+      debug <span class="hljs-string">"Not translating: we don't know the from lang"</span> <span class="hljs-keyword">if</span> <span class="hljs-keyword">not</span> from
+      debug <span class="hljs-string">"Not translating: we don't know the to lang"</span> <span class="hljs-keyword">if</span> <span class="hljs-keyword">not</span> to
+      debug <span class="hljs-string">"Not translating: src and target langs are the same"</span> <span class="hljs-keyword">if</span> sameLanguage
+      @push chunk
+      cb()
+      <span class="hljs-keyword">return</span>
+
+    options =
+      text: words
+      source: from
+      target: to
+    LanguageTranslation.translate options, <span class="hljs-function"><span class="hljs-params">(err, result)</span> =&gt;</span>
+      <span class="hljs-keyword">if</span> (err)
+        debug <span class="hljs-string">"Watson translation error :  "</span> + Util.inspect err
+        debug <span class="hljs-string">"Translation run with <span class="hljs-subst">#{Util.inspect options}</span>"</span>
+        @push chunk
+      <span class="hljs-keyword">else</span>
+        trans = result.translations[<span class="hljs-number">0</span>].translation
+        trans += <span class="hljs-string">'\n'</span> <span class="hljs-keyword">unless</span> trans.slice(<span class="hljs-number">-1</span>) <span class="hljs-keyword">is</span> <span class="hljs-string">'\n'</span>
+        debug <span class="hljs-string">"Original : <span class="hljs-subst">#{words}</span>"</span>
+        debug <span class="hljs-string">"Trans: <span class="hljs-subst">#{Util.inspect trans}</span>"</span>
+        buffTrans = <span class="hljs-keyword">new</span> Buffer trans
+        debug <span class="hljs-string">"Trans: <span class="hljs-subst">#{Util.inspect buffTrans}</span>"</span>
+        debug <span class="hljs-string">"Trans: <span class="hljs-subst">#{Util.inspect chunk}</span>"</span>
+        @push buffTrans
+      cb()
+      <span class="hljs-keyword">return</span>
+
+<span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">LanguageFilter</span></span>
+  constructor: <span class="hljs-function"><span class="hljs-params">(@nearEndLanguage, @farEndLanguage)</span> -&gt;</span>
+    nearEndDetector = <span class="hljs-keyword">new</span> LanguageDetector(@nearEndLanguage, <span class="hljs-string">"Near End"</span>)
+    farEndDetector = <span class="hljs-keyword">new</span> LanguageDetector(@farEndLanguage, <span class="hljs-string">"Far End"</span>)
+    ingressLangStream = <span class="hljs-keyword">new</span> LanguageStream  farEndDetector.getLang,
+                                            nearEndDetector.getLang
+    egressLangStream = <span class="hljs-keyword">new</span> LanguageStream  nearEndDetector.getLang,
+                                           farEndDetector.getLang
+    @ingressStream = Pipe(farEndDetector, ingressLangStream)
+    @egressStream = Pipe(nearEndDetector, egressLangStream)
+
+<span class="hljs-built_in">module</span>.exports = LanguageFilter</pre></div></div>
+            
+        </li>
+        
+    </ul>
+  </div>
+</body>
+</html>
