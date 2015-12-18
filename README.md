@@ -43,13 +43,6 @@ egressProcessStream = Pipe(process.stdout, language.egressStream)
 ```
 
 
-## Tests
-
-```sh
-npm install
-npm test
-```
-
 ## Dependencies
 
 - [multipipe](https://github.com/juliangruber/multipipe): pipe streams with centralized error handling
