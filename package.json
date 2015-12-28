@@ -1,6 +1,6 @@
 {
   "name": "watson-translate-stream",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "A duplex stream that detects and translates natural language using IBM Watson",
   "main": "lib/index.js",
   "scripts": {
