@@ -6,6 +6,7 @@
 Stream = require('stream')
 Pipe = require('multipipe')
 Util = require('util')
+{EventEmitter} = require('events')
 
 DEBUG = true
 debug = (text) ->
@@ -20,10 +21,9 @@ if process.env.WATSON_USERNAME? and process.env.WATSON_PASSWORD?
     )
 
 class LanguageDetector extends Stream.Transform
-  constructor: (@lang, @detectorId) ->
+  constructor: (@lang, @adaptive, @detectorId) ->
     @detectorId ?= 'Language Detector'
     @debug = (text) -> debug "[#{@detectorId}] " + text
-    @adaptive = !@lang
     @words = ''
     super
     @debug "Adaptive value in constructor: #{@adaptive}"
@@ -31,6 +31,17 @@ class LanguageDetector extends Stream.Transform
       @debug "Detector contstructed with #{@lang}"
     else
       @debug "Detector constructed in adaptive mode"
+
+  bestLangGuess : (currentLang, bestGuess, secondGuess) ->
+    debug "Best guess: #{bestGuess.language}: #{bestGuess.confidence}"
+    debug "Second guess: #{secondGuess.language}: #{secondGuess.confidence}"
+    return currentLang if bestGuess.language is currentLang
+    # If the best guess is twice the current guess, choose it.
+    # Otherwise, keep the status quo.
+    if bestGuess.confidence > (2 * secondGuess.confidence)
+      return bestGuess.language
+    currentLang
+
 
   analyze: (words, cb) =>
     @debug "Adaptive value in analyze: #{@adaptive}"
@@ -42,7 +53,15 @@ class LanguageDetector extends Stream.Transform
         if (err)
           @debug "Language detection error : " + err
         else
-          @lang = result.languages[0].language
+          # Debounce this. If the another language is twice as likely
+          # as the one we are using, switch it.
+          bestGuess = result.languages[0]
+          secondGuess = result.languages[1]
+          newLang = @bestLangGuess @lang, bestGuess, secondGuess
+          if @lang isnt newLang
+            @debug "language change: Old: #{@lang}, New: #{newLang}"
+            @emit 'langChanged', @lang, newLang
+          @lang = newLang
           # TODO: Check to see if @lang a supported translation.
           @debug "Language detected as " + @lang
         cb()
@@ -105,15 +124,23 @@ class LanguageStream extends Stream.Transform
       cb()
       return
 
-class LanguageFilter
-  constructor: (@nearEndLanguage, @farEndLanguage) ->
-    nearEndDetector = new LanguageDetector(@nearEndLanguage, "Near End")
-    farEndDetector = new LanguageDetector(@farEndLanguage, "Far End")
+class LanguageFilter extends EventEmitter
+  constructor: (@nearEndLanguage, @farEndLanguage, @adaptive) ->
+    @adaptive ?= true
+    nearEndDetector = new LanguageDetector( @nearEndLanguage,
+                                            @adaptive,
+                                            "Near End")
+    farEndDetector = new LanguageDetector(  @farEndLanguage,
+                                            @adaptive,
+                                            "Far End")
     ingressLangStream = new LanguageStream  farEndDetector.getLang,
                                             nearEndDetector.getLang
     egressLangStream = new LanguageStream  nearEndDetector.getLang,
                                            farEndDetector.getLang
     @ingressStream = Pipe(farEndDetector, ingressLangStream)
     @egressStream = Pipe(nearEndDetector, egressLangStream)
+    farEndDetector.on 'langChanged', (oldLang, newLang) =>
+      debug "Language change event : #{oldLang} to #{newLang}"
+      @emit 'langChanged', oldLang, newLang
 
 module.exports = LanguageFilter
